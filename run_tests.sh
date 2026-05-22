@@ -1,35 +1,34 @@
 #!/bin/bash
 set -e
-echo "Setting up virtual environment..."
 
-check_venv() {
-  if [ -d ".venv" ]; then
-    echo "Virtual environment already exists. Continuing with existing one..."
+CLEANUP() {
+    echo "Cleaning up: stopping and removing container..."
+    docker stop test-api 2>/dev/null || true
+    docker rm test-api 2>/dev/null || true
+}
+trap CLEANUP EXIT
+
+echo "Setting up virtual environment..."
+if [ -d ".venv" ]; then
+    echo "Virtual environment already exists. Activating..."
     source .venv/bin/activate
-  else
+else
     echo "Creating new virtual environment..."
     python3 -m venv .venv
     source .venv/bin/activate
-
     echo "Installing dependencies..."
     pip install -q -r requirements.txt
-  fi
-}
-
-check_venv
+fi
 
 echo "Starting API container..."
 docker run -d --name test-api -p 8080:8080 infralightio/test-integration-api
 
 echo "Waiting for API to be ready..."
-until curl -s http://localhost:8080/swagger/index.html > /dev/null; do
-  sleep 1
+until curl -s --fail http://localhost:8080/swagger/index.html > /dev/null; do
+    sleep 1
 done
 
 echo "Running tests..."
 pytest --html=reports/report.html --self-contained-html
-
-echo "Stopping container..."
-docker stop test-api && docker rm test-api
 
 echo "Report generated at reports/report.html"
